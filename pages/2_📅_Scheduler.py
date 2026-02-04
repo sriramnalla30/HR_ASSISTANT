@@ -39,7 +39,7 @@ l2_scheduled = df[df['Status'] == 'L2_Scheduled']
 # ============================================
 # AUTO-SCHEDULER FUNCTION
 # ============================================
-def auto_schedule_candidates(candidates_df, interview_type="L1", start_date=None):
+def auto_schedule_candidates(candidates_df, interview_type="L1", start_date=None, start_time=None):
     """
     Assigns time slots to candidates who don't have one.
     Fills 8 slots per day, starting from specified date.
@@ -79,6 +79,12 @@ def auto_schedule_candidates(candidates_df, interview_type="L1", start_date=None
         date_candidates = already_scheduled[already_scheduled[date_col] == date_str]
         return date_candidates[time_col].tolist()
     
+    if start_time_slot:
+        start_index=TIME_SLOTS.index(start_time_slot)
+        filtered_slots=TIME_SLOTS[start_index:]
+    else:
+        filtered_slots=TIME_SLOTS
+
     for _, candidate in unscheduled.iterrows():
         date_str = current_date.strftime("%Y-%m-%d")
         
@@ -101,7 +107,7 @@ def auto_schedule_candidates(candidates_df, interview_type="L1", start_date=None
             date_str = current_date.strftime("%Y-%m-%d")
             taken_slots = get_taken_slots(date_str)
             
-            for slot in TIME_SLOTS:
+            for slot in filtered_slots:
                 if slot not in taken_slots:
                     available_slot = slot
                     break
@@ -152,7 +158,11 @@ l1_start_date = st.sidebar.date_input(
     value=datetime.now().date(),
     key="l1_start"
 )
-
+l1_start_time=st.sidebar.selectbox(
+    "Start From Time Slot",
+    options=TIME_SLOTS,
+    key="l1_start_time"
+)
 if st.sidebar.button("📋 Schedule L1 Interviews"):
     # Clear cache and reload fresh data to include ALL screening candidates
     st.cache_data.clear()
@@ -160,13 +170,15 @@ if st.sidebar.button("📋 Schedule L1 Interviews"):
     fresh_df = fresh_connector.get_all_candidates()
     fresh_screening = fresh_df[fresh_df['Status'] == 'Screening']
     
-    count = auto_schedule_candidates(fresh_screening, "L1", start_date=l1_start_date)
+    count = auto_schedule_candidates(fresh_screening, "L1", start_date=l1_start_date,start_time_slot=l1_start_time)
     if count > 0:
         st.sidebar.success(f"✅ Scheduled {count} L1 interviews!")
         st.rerun()
     else:
         st.sidebar.info("No candidates to schedule")
 
+st.sidebar.markdown("---")
+st.slidebar.subheader("")
 # L2 Scheduling with Date Selector
 st.sidebar.markdown("---")
 st.sidebar.subheader("📅 L2 Schedule Settings")
@@ -176,7 +188,11 @@ l2_start_date = st.sidebar.date_input(
     value=datetime.now().date(),
     key="l2_start"
 )
-
+l2_start_time=st.sidebar.selectbox(
+    "Start From Time Slot",
+    options=TIME_SLOTS,
+    key="l2_start_time"
+)
 if st.sidebar.button("📋 Schedule L2 Interviews"):
     # Clear cache and reload fresh data
     st.cache_data.clear()
@@ -184,7 +200,7 @@ if st.sidebar.button("📋 Schedule L2 Interviews"):
     fresh_df = fresh_connector.get_all_candidates()
     fresh_l1_done = fresh_df[fresh_df['Status'] == 'L1_Done']
     
-    count = auto_schedule_candidates(fresh_l1_done, "L2", start_date=l2_start_date)
+    count = auto_schedule_candidates(fresh_l1_done, "L2", start_date=l2_start_date,start_time_slot=l2_start_time)
     if count > 0:
         st.sidebar.success(f"✅ Scheduled {count} L2 interviews!")
         st.rerun()
