@@ -95,13 +95,7 @@ The Anti-Ghosting Bot has a Demo Mode that:
 - **HR Alerts**: Automatic notifications when Ghost Risk > 40%
 - **AI Messages**: Groq-powered personalized content
 
-## 🤝 Contributing
 
-Pull requests are welcome! For major changes, please open an issue first.
-
-## 📄 License
-
-MIT License
 
 ---
 
