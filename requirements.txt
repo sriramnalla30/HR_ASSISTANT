@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+gspread
+pandas
+python-dotenv
+streamlit
+groq
+streamlit-autorefresh
