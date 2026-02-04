@@ -2,7 +2,6 @@ import streamlit as st
 import sys
 import os
 
-# Add utils to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils.sheets_connector import get_connector
 
@@ -28,13 +27,9 @@ This system helps you manage your recruitment pipeline with AI assistance.
 👈 **Select a tool from the sidebar to get started!**
 """)
 
-# ============================================
-# REAL-TIME METRICS FROM GOOGLE SHEETS
-# ============================================
 st.markdown("---")
 st.subheader("📈 Quick Status")
 
-# Load real data
 @st.cache_data(ttl=60)
 def load_data():
     connector = get_connector()
@@ -58,7 +53,6 @@ try:
 
 except Exception as e:
     st.error(f"Could not load data: {e}")
-    # Fallback to placeholder
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total Candidates", "—")

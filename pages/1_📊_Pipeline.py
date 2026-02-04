@@ -3,14 +3,9 @@ import sys
 import os
 from datetime import datetime
 
-# Add parent directory to path so we can import from utils
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from utils.sheets_connector import get_connector
 
-# ============================================
-# PAGE CONFIG
-# ============================================
 st.set_page_config(
     page_title="Pipeline Dashboard",
     page_icon="📊",
@@ -20,28 +15,18 @@ st.set_page_config(
 st.title("📊 Pipeline Dashboard")
 st.markdown("Manage your recruitment pipeline")
 
-# ============================================
-# LOAD DATA
-# ============================================
-@st.cache_data(ttl=60)  # Cache for 60 seconds
+@st.cache_data(ttl=60)
 def load_candidates():
-    """Load candidates from Google Sheets"""
     connector = get_connector()
     return connector.get_all_candidates()
 
-# Load the data
 df = load_candidates()
 
-# ============================================
-# SIDEBAR FILTERS
-# ============================================
 st.sidebar.header("🔍 Filters")
 
-# Get unique statuses and roles
 all_statuses = df['Status'].unique().tolist()
 all_roles = df['Role'].unique().tolist()
 
-# Filter dropdowns
 selected_status = st.sidebar.selectbox(
     "Filter by Status",
     options=["All"] + all_statuses
@@ -52,16 +37,12 @@ selected_role = st.sidebar.selectbox(
     options=["All"] + all_roles
 )
 
-# Apply filters
 filtered_df = df.copy()
 if selected_status != "All":
     filtered_df = filtered_df[filtered_df['Status'] == selected_status]
 if selected_role != "All":
     filtered_df = filtered_df[filtered_df['Role'] == selected_role]
 
-# ============================================
-# METRICS ROW
-# ============================================
 st.markdown("---")
 col1, col2, col3, col4, col5 = st.columns(5)
 
@@ -76,16 +57,11 @@ with col4:
 with col5:
     st.metric("👻 Ghosted", len(df[df['Status'] == 'Ghosted']))
 
-# ============================================
-# CANDIDATES TABLE
-# ============================================
 st.markdown("---")
 st.subheader(f"👥 Candidates ({len(filtered_df)})")
 
-# Display editable table
 edited_df = st.data_editor(
     filtered_df,
-    width="stretch",
     num_rows="fixed",
     column_config={
         "Status": st.column_config.SelectboxColumn(
@@ -103,20 +79,12 @@ edited_df = st.data_editor(
             ],
             required=True
         ),
-        "Ghost_Risk": st.column_config.ProgressColumn(
-            "Ghost Risk",
-            min_value=0,
-            max_value=100
-        )
+        "Ghost_Risk": st.column_config.TextColumn("Ghost Risk")
     }
 )
 
-# ============================================
-# SAVE CHANGES TO GOOGLE SHEETS
-# ============================================
 st.markdown("---")
 
-# Check if any changes were made
 if not df.equals(edited_df):
     st.warning("⚠️ You have unsaved changes!")
     
@@ -124,11 +92,9 @@ if not df.equals(edited_df):
         connector = get_connector()
         changes_made = 0
         
-        # Find rows that changed
         for index, row in edited_df.iterrows():
             original_row = df.loc[index]
             
-            # Check if status changed
             if row['Status'] != original_row['Status']:
                 connector.update_candidate_status(
                     email=row['Email'],
@@ -142,9 +108,7 @@ if not df.equals(edited_df):
             st.rerun()
         else:
             st.info("No status changes detected.")
-# ============================================
-# PENDING OFFERS SECTION
-# ============================================
+
 st.markdown("---")
 st.subheader("📨 Pending Offers")
 
@@ -184,9 +148,6 @@ else:
         
         st.markdown("---")
 
-# ============================================
-# REFRESH BUTTON
-# ============================================
 if st.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()

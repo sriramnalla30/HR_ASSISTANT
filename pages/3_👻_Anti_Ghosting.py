@@ -1,7 +1,7 @@
 import streamlit as st
 import sys
 import os 
-from datetime import datetime,timedelta
+from datetime import datetime, timedelta
 from streamlit_autorefresh import st_autorefresh
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -20,12 +20,12 @@ st.markdown("Keep candidates engaged during their notice period")
 
 @st.cache_data(ttl=60)
 def load_candidates():
-    connector=get_connector()
+    connector = get_connector()
     return connector.get_all_candidates()
 
-df=load_candidates()
+df = load_candidates()
 
-notice_period_candidates=df[df['Status']=='Offer_Accepted']
+notice_period_candidates = df[df['Status'] == 'Offer_Accepted']
 
 st.markdown("---")
 st.subheader("📋 Candidates in Notice Period")
@@ -34,32 +34,22 @@ if len(notice_period_candidates) == 0:
 else:
     st.dataframe(
         notice_period_candidates[['Name', 'Email', 'Role', 'Applied_Date']],
-        width="stretch"
+        use_container_width=True
     )
 
-# ============================================
-# CANDIDATE SELECTION & TIME TRAVEL
-# ============================================
 if len(notice_period_candidates) > 0:
     st.sidebar.markdown("---")
     st.sidebar.header("⚙️ Controls")
     
-    # 1. Select Candidate
     candidate_names = notice_period_candidates['Name'].tolist()
     selected_name = st.sidebar.selectbox("👤 Select Candidate", candidate_names)
     
-    # Get selected candidate data
     candidate = notice_period_candidates[
         notice_period_candidates['Name'] == selected_name
     ].iloc[0]
     
-    # 2. Time Travel Slider (Demo Feature)
     st.sidebar.markdown("---")
     st.sidebar.subheader("⏳ Time Travel (Demo)")
-    
-    # Calculate days since offer accepted (mock if not present)
-    # In real app, we'd use Offer_Accepted_Date from sheet
-    # For now, we simulate day 0-90
     
     days_passed = st.sidebar.slider(
         "Days into Notice Period",
@@ -69,21 +59,17 @@ if len(notice_period_candidates) > 0:
         format="Day %d"
     )
     
-    # Demo Mode Timer
     st.sidebar.markdown("---")
     st.sidebar.subheader("⏱️ Demo Settings")
     demo_mode = st.sidebar.checkbox("🧪 Demo Mode (1 min timer)", value=True)
     check_minutes = 1 if demo_mode else 120
     
-    # Auto-Check Toggle
     auto_check = st.sidebar.checkbox("🔄 Auto-Check Responses", value=False)
     
-    # Pause Alerts Toggle
     pause_alerts = st.sidebar.checkbox("⏸️ Pause HR Alerts", value=False)
     if pause_alerts:
         st.sidebar.warning("📧 HR emails paused!")
     
-    # Reset tracking when Auto-Check is turned OFF
     if not auto_check:
         if 'auto_emails_sent' in st.session_state:
             st.session_state.auto_emails_sent = False
@@ -92,27 +78,21 @@ if len(notice_period_candidates) > 0:
         if 'alerted_candidates' in st.session_state:
             st.session_state.alerted_candidates = set()
     
-    # HR Email for notifications
     HR_EMAIL = "sriramnalla30@gmail.com"
     
     if auto_check:
-        # Refresh every 30 seconds when auto-check is ON
         count = st_autorefresh(interval=30000, limit=100, key="auto_checker")
         st.sidebar.success(f"🔄 Auto-checking... (refresh #{count})")
         
-        # Clear cache to get fresh data
         st.cache_data.clear()
         
-        # Re-load fresh data
         connector = get_connector()
         fresh_df = connector.get_all_candidates()
-        fresh_notice = fresh_df[fresh_df['Status']=='Offer_Accepted']
+        fresh_notice = fresh_df[fresh_df['Status'] == 'Offer_Accepted']
         
-        # Initialize session state for tracking emailed candidates
         if 'emailed_candidates' not in st.session_state:
             st.session_state.emailed_candidates = set()
         
-        # AUTO-SEND: When Auto-Check is first enabled, send emails to ALL candidates
         if 'auto_emails_sent' not in st.session_state:
             st.session_state.auto_emails_sent = False
         
@@ -122,7 +102,6 @@ if len(notice_period_candidates) > 0:
             
             for i, (_, cand) in enumerate(fresh_notice.iterrows()):
                 if cand['Name'] not in st.session_state.emailed_candidates:
-                    # Send welcome email
                     try:
                         email_subject = "Welcome aboard! 🎉"
                         email_body = f"Hi {cand['Name'].split()[0]},\n\nWe are thrilled that you accepted our offer! The whole team is excited to have you join as a {cand['Role']}.\n\nLet us know if you have any questions!"
@@ -142,39 +121,33 @@ if len(notice_period_candidates) > 0:
             st.session_state.auto_emails_sent = True
             st.info("📧 All candidates emailed! Now tracking responses...")
         
-        # Auto-check ALL candidates for responses
         st.markdown("### 🔔 Auto-Check Results")
         ghosting_candidates = []
         responding_candidates = []
-        waiting_candidates = []  # Candidates not yet emailed
-        updated_risks = {}  # Track new risk values
+        waiting_candidates = []
+        updated_risks = {}
         
         for _, cand in fresh_notice.iterrows():
-            # ONLY check for reply if we've sent them an email
             if cand['Name'] not in st.session_state.emailed_candidates:
                 waiting_candidates.append(cand['Name'])
-                # Keep current risk (don't change)
                 try:
                     risk_val = cand.get('Ghost_Risk', '')
                     current_risk = int(risk_val) if risk_val and str(risk_val).isdigit() else 10
                 except:
                     current_risk = 10
                 updated_risks[cand['Name']] = current_risk
-                continue  # Skip to next candidate
+                continue
             
-            # Check for reply from emailed candidates
             result = check_for_reply(from_email=cand['Email'], since_minutes=check_minutes)
             if result['found']:
                 responding_candidates.append(cand['Name'])
                 updated_risks[cand['Name']] = 10
-                # Reset ghost risk if responding
                 connector.update_candidate_status(
                     email=cand['Email'],
                     new_status="Offer_Accepted",
                     additional_updates={"Ghost_Risk": "10"}
                 )
             else:
-                # Increase ghost risk
                 try:
                     risk_val = cand.get('Ghost_Risk', '')
                     current_risk = int(risk_val) if risk_val and str(risk_val).isdigit() else 10
@@ -189,7 +162,6 @@ if len(notice_period_candidates) > 0:
                     additional_updates={"Ghost_Risk": str(new_risk)}
                 )
         
-        # Display results
         if waiting_candidates:
             st.info(f"📨 **Waiting for first email:** {', '.join(waiting_candidates)}")
         
@@ -199,27 +171,23 @@ if len(notice_period_candidates) > 0:
         if ghosting_candidates:
             st.warning(f"⚠️ **No reply (potential ghost):** {', '.join(ghosting_candidates)}")
         
-        # Only send HR Alert if any candidate has risk > 40%
         high_risk_candidates = []
         for name, risk in updated_risks.items():
             if risk > 40:
                 high_risk_candidates.append(f"{name} ({risk}%)")
         
-        # Initialize session state for tracking alerted candidates
         if 'alerted_candidates' not in st.session_state:
             st.session_state.alerted_candidates = set()
         
         if high_risk_candidates:
             st.error(f"🚨 **HIGH RISK (>40%):** {', '.join(high_risk_candidates)}")
             
-            # Find NEW high-risk candidates (not already alerted)
             new_alerts = []
             for name, risk in updated_risks.items():
                 if risk > 40 and name not in st.session_state.alerted_candidates:
                     new_alerts.append(f"{name} ({risk}%)")
                     st.session_state.alerted_candidates.add(name)
             
-            # Send HR Alert Email ONLY for NEW high-risk candidates
             if new_alerts and not pause_alerts:
                 alert_subject = "🚨 Ghost Alert: Candidates Need Immediate Attention!"
                 alert_body = f"""
@@ -245,16 +213,13 @@ This is an automated alert from the Recruiters Assistant.
             else:
                 st.caption("ℹ️ HR already alerted for these candidates")
     
-    # Reload fresh data for accurate display
     fresh_connector = get_connector()
     fresh_data = fresh_connector.get_all_candidates()
-    fresh_candidates = fresh_data[fresh_data['Status']=='Offer_Accepted']
+    fresh_candidates = fresh_data[fresh_data['Status'] == 'Offer_Accepted']
     
-    # Get fresh candidate data for display
     if len(fresh_candidates[fresh_candidates['Name'] == selected_name]) > 0:
         candidate = fresh_candidates[fresh_candidates['Name'] == selected_name].iloc[0]
     
-    # Display selected candidate info
     st.markdown("---")
     col1, col2, col3 = st.columns(3)
     
@@ -266,19 +231,15 @@ This is an automated alert from the Recruiters Assistant.
         st.metric("📧 Email", candidate['Email'])
         
     with col3:
-        # Ghost Risk - Read from sheet or calculate
-        # Combines stored risk with time-based risk
         try:
             ghost_risk_value = candidate.get('Ghost_Risk', '')
-            # Handle empty, None, or non-numeric values
             if ghost_risk_value and str(ghost_risk_value).isdigit():
                 stored_risk = int(ghost_risk_value)
             else:
-                stored_risk = 10  # Default risk
+                stored_risk = 10
         except:
             stored_risk = 10
         
-        # Add time-based risk bonus
         time_risk = 0
         if days_passed > 30: time_risk += 10
         if days_passed > 60: time_risk += 20
@@ -286,19 +247,14 @@ This is an automated alert from the Recruiters Assistant.
         
         total_risk = min(stored_risk + time_risk, 100)
         
-        # Color coding risk
         risk_color = "green"
         if total_risk > 40: risk_color = "orange"
         if total_risk > 70: risk_color = "red"
         
         st.markdown(f'''<div style="text-align: center;"><p style="margin-bottom: 0px;">👻 Ghost Risk</p><h2 style="color: {risk_color}; margin-top: 0px;">{total_risk}%</h2></div>''', unsafe_allow_html=True)
         
-    # ============================================
-    # ENGAGEMENT TIMELINE
-    # ============================================
     st.markdown("### 📅 Engagement Timeline")
     
-    # Define touchpoints
     touchpoints = {
         1:  "🎉 Offer Accepted",
         7:  "📋 Onboarding Docs",
@@ -308,23 +264,21 @@ This is an automated alert from the Recruiters Assistant.
         90: "🏁 Day 1 Joined"
     }
     
-    # Determine current stage
     current_stage = None
     next_stage = None
     
     stages_html = ""
     
     for day, label in touchpoints.items():
-        # Determine status of this stage
-        status_color = "#e0e0e0"  # Default gray (future)
+        status_color = "#e0e0e0"
         opacity = 0.5
         
         if days_passed >= day:
-            status_color = "#4CAF50"  # Green (completed)
+            status_color = "#4CAF50"
             opacity = 1.0
             current_stage = label
         elif next_stage is None:
-            status_color = "#2196F3"  # Blue (next up)
+            status_color = "#2196F3"
             opacity = 1.0
             next_stage = label
             
@@ -332,13 +286,9 @@ This is an automated alert from the Recruiters Assistant.
         
     st.markdown(f'''<div style="display: flex; justify-content: space-between; margin: 20px 0;">{stages_html}</div>''', unsafe_allow_html=True)
     
-    # ============================================
-    # MESSAGE PREVIEW
-    # ============================================
     st.markdown("---")
     st.subheader("💬 Active Engagement")
     
-    # Select message templates based on days passed
     message_subject = ""
     message_body = ""
     
@@ -363,7 +313,6 @@ This is an automated alert from the Recruiters Assistant.
     with col1:
         st.info(f"**Template Subject:** {message_subject}")
         
-        # AI Generate Button
         if st.button("🤖 Generate AI Message"):
             with st.spinner("AI is writing your message..."):
                 ai_message = generate_engagement_message(
@@ -375,7 +324,6 @@ This is an automated alert from the Recruiters Assistant.
                 st.session_state['ai_subject'] = ai_message['subject']
                 st.session_state['ai_body'] = ai_message['body']
         
-        # Show AI generated or template message
         if 'ai_subject' in st.session_state:
             final_subject = st.text_input("Subject", value=st.session_state['ai_subject'])
             final_body = st.text_area("Message", value=st.session_state['ai_body'], height=200)
@@ -383,7 +331,6 @@ This is an automated alert from the Recruiters Assistant.
             final_subject = st.text_input("Subject", value=message_subject)
             final_body = st.text_area("Message", value=message_body, height=200)
         
-        # Send Email Button
         if st.button("📨 Send Email"):
             try:
                 send_email(
@@ -391,7 +338,6 @@ This is an automated alert from the Recruiters Assistant.
                     subject=final_subject,
                     body=final_body
                 )
-                # Track that we emailed this candidate
                 if 'emailed_candidates' not in st.session_state:
                     st.session_state.emailed_candidates = set()
                 st.session_state.emailed_candidates.add(candidate['Name'])
@@ -401,7 +347,6 @@ This is an automated alert from the Recruiters Assistant.
             except Exception as e:
                 st.error(f"❌ Failed to send: {e}")
         
-        # Check Response Button
         st.markdown("---")
         if st.button("🔍 Check for Reply"):
             with st.spinner(f"Checking inbox (last {check_minutes} min)..."):
@@ -427,7 +372,6 @@ This is an automated alert from the Recruiters Assistant.
         else:
             st.info("🏭 Production Mode")
         
-        # Show ghost risk status
         st.markdown("---")
         st.markdown("### 👻 Ghost Risk")
         try:
